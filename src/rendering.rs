@@ -3,7 +3,6 @@ use bevy::prelude::*;
 use crate::map::{HexCoord, Map, TileKind};
 
 const HEX_RADIUS: f32 = 24.0;
-const HEX_MESH_RADIUS: f32 = 23.5;
 const MAP_Z: f32 = 0.0;
 const CAMERA_Z: f32 = 1_000.0;
 
@@ -38,7 +37,7 @@ fn spawn_map_tiles(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    let hex_mesh = meshes.add(RegularPolygon::new(HEX_MESH_RADIUS, 6));
+    let hex_mesh = meshes.add(RegularPolygon::new(HEX_RADIUS, 6));
     let floor_material = materials.add(ColorMaterial::from_color(Color::srgb(0.12, 0.35, 0.34)));
     let wall_material = materials.add(ColorMaterial::from_color(Color::srgb(0.08, 0.10, 0.14)));
 
@@ -53,8 +52,7 @@ fn spawn_map_tiles(
             RenderedTile { coord },
             Mesh2d(hex_mesh.clone()),
             MeshMaterial2d(material),
-            Transform::from_xyz(world.x, world.y, MAP_Z)
-                .with_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_6)),
+            Transform::from_xyz(world.x, world.y, MAP_Z),
         ));
     }
 }

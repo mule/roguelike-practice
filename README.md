@@ -23,6 +23,15 @@ cargo run
 cargo test
 ```
 
+## Controls
+
+- `E`: east
+- `D`: southeast
+- `S`: southwest
+- `A`: west
+- `Q`: northwest
+- `W`: northeast
+
 ## Current Structure
 
 - `src/main.rs` launches the Bevy app.

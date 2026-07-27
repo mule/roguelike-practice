@@ -121,6 +121,10 @@ impl Map {
         self.tiles.get(&coord).copied()
     }
 
+    pub fn tiles(&self) -> impl Iterator<Item = (HexCoord, Tile)> + '_ {
+        self.tiles.iter().map(|(coord, tile)| (*coord, *tile))
+    }
+
     pub fn is_walkable(&self, coord: HexCoord) -> bool {
         self.tile(coord).is_some_and(Tile::is_walkable)
     }

@@ -25,12 +25,10 @@ cargo test
 
 ## Controls
 
-- `E`: east
-- `D`: southeast
-- `S`: southwest
-- `A`: west
-- `Q`: northwest
-- `W`: northeast
+- `W`: move forward in the current facing direction
+- `S`: move backward without changing facing
+- `Q`: rotate facing left
+- `E`: rotate facing right
 
 ## Current Structure
 

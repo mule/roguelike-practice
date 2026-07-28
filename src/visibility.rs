@@ -57,10 +57,16 @@ impl VisibilityDirty {
 
 #[derive(Resource)]
 struct VisibilityMaterials {
+    visible_ground: Handle<ColorMaterial>,
     visible_floor: Handle<ColorMaterial>,
     visible_wall: Handle<ColorMaterial>,
+    visible_forest: Handle<ColorMaterial>,
+    visible_hill: Handle<ColorMaterial>,
+    explored_ground: Handle<ColorMaterial>,
     explored_floor: Handle<ColorMaterial>,
     explored_wall: Handle<ColorMaterial>,
+    explored_forest: Handle<ColorMaterial>,
+    explored_hill: Handle<ColorMaterial>,
     hidden: Handle<ColorMaterial>,
 }
 
@@ -90,10 +96,16 @@ fn setup_visibility_materials(
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     commands.insert_resource(VisibilityMaterials {
+        visible_ground: materials.add(ColorMaterial::from_color(Color::srgb(0.24, 0.38, 0.22))),
         visible_floor: materials.add(ColorMaterial::from_color(Color::srgb(0.16, 0.52, 0.48))),
         visible_wall: materials.add(ColorMaterial::from_color(Color::srgb(0.18, 0.22, 0.30))),
+        visible_forest: materials.add(ColorMaterial::from_color(Color::srgb(0.08, 0.34, 0.14))),
+        visible_hill: materials.add(ColorMaterial::from_color(Color::srgb(0.46, 0.42, 0.22))),
+        explored_ground: materials.add(ColorMaterial::from_color(Color::srgb(0.08, 0.13, 0.08))),
         explored_floor: materials.add(ColorMaterial::from_color(Color::srgb(0.05, 0.16, 0.16))),
         explored_wall: materials.add(ColorMaterial::from_color(Color::srgb(0.04, 0.05, 0.08))),
+        explored_forest: materials.add(ColorMaterial::from_color(Color::srgb(0.02, 0.10, 0.04))),
+        explored_hill: materials.add(ColorMaterial::from_color(Color::srgb(0.13, 0.12, 0.07))),
         hidden: materials.add(ColorMaterial::from_color(Color::srgb(0.005, 0.007, 0.012))),
     });
 }
@@ -137,16 +149,22 @@ fn material_for_tile(
 ) -> Handle<ColorMaterial> {
     if reveal_all || state.is_visible(coord) {
         return match map.tile(coord).map(|tile| tile.kind) {
+            Some(TileKind::Ground) => materials.visible_ground.clone(),
             Some(TileKind::Floor) => materials.visible_floor.clone(),
             Some(TileKind::Wall) => materials.visible_wall.clone(),
+            Some(TileKind::Forest) => materials.visible_forest.clone(),
+            Some(TileKind::Hill) => materials.visible_hill.clone(),
             None => materials.hidden.clone(),
         };
     }
 
     if state.is_explored(coord) {
         return match map.tile(coord).map(|tile| tile.kind) {
+            Some(TileKind::Ground) => materials.explored_ground.clone(),
             Some(TileKind::Floor) => materials.explored_floor.clone(),
             Some(TileKind::Wall) => materials.explored_wall.clone(),
+            Some(TileKind::Forest) => materials.explored_forest.clone(),
+            Some(TileKind::Hill) => materials.explored_hill.clone(),
             None => materials.hidden.clone(),
         };
     }

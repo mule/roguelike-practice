@@ -32,6 +32,8 @@ cargo test
 
 - `W`: move forward in the current facing direction
 - `S`: move backward without changing facing
+- `A`: side-step left without changing facing
+- `D`: side-step right without changing facing
 - `Q`: rotate facing left
 - `E`: rotate facing right
 

@@ -41,13 +41,16 @@ The current hex directions come from `HexCoord::DIRECTIONS`:
 
 The screen-facing directions are gameplay directions, not raw hex directions.
 Because the map is pointy-top, vertical movement alternates between diagonal hex
-steps. LOS uses the same visual facing model as the player triangle:
+steps, while east/west movement can use direct hex neighbors. LOS uses the same
+eight-direction visual facing model as the player triangle:
 
 - `North`
 - `Northeast`
+- `East`
 - `Southeast`
 - `South`
 - `Southwest`
+- `West`
 - `Northwest`
 
 ## Visibility State
@@ -76,7 +79,7 @@ Visibility is recomputed only when needed.
 After that:
 
 - rotating left or right marks visibility dirty;
-- successful forward or backward movement marks visibility dirty;
+- successful forward, backward, or side-step movement marks visibility dirty;
 - blocked movement does not mark visibility dirty.
 
 That means a failed bump into a wall does not waste work or change the fog state.

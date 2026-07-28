@@ -12,6 +12,83 @@ impl Default for WorldSeed {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MapSizePreset {
+    Small,
+    Medium,
+    Large,
+    Custom,
+}
+
+impl MapSizePreset {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Small => "small",
+            Self::Medium => "medium",
+            Self::Large => "large",
+            Self::Custom => "custom",
+        }
+    }
+}
+
+#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MapGenerationConfig {
+    pub preset: MapSizePreset,
+    pub radius: i32,
+}
+
+impl MapGenerationConfig {
+    pub const MIN_RADIUS: i32 = 6;
+    pub const MAX_RADIUS: i32 = 48;
+
+    pub const fn small() -> Self {
+        Self {
+            preset: MapSizePreset::Small,
+            radius: 8,
+        }
+    }
+
+    pub const fn medium() -> Self {
+        Self {
+            preset: MapSizePreset::Medium,
+            radius: 12,
+        }
+    }
+
+    pub const fn large() -> Self {
+        Self {
+            preset: MapSizePreset::Large,
+            radius: 20,
+        }
+    }
+
+    pub fn custom(radius: i32) -> Option<Self> {
+        if !(Self::MIN_RADIUS..=Self::MAX_RADIUS).contains(&radius) {
+            return None;
+        }
+
+        Some(Self {
+            preset: MapSizePreset::Custom,
+            radius,
+        })
+    }
+
+    pub fn named(name: &str) -> Option<Self> {
+        match name.to_ascii_lowercase().as_str() {
+            "small" => Some(Self::small()),
+            "medium" => Some(Self::medium()),
+            "large" => Some(Self::large()),
+            _ => None,
+        }
+    }
+}
+
+impl Default for MapGenerationConfig {
+    fn default() -> Self {
+        Self::medium()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct HexCoord {
     pub q: i32,
@@ -90,6 +167,7 @@ impl Tile {
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
 pub struct Map {
     pub seed: WorldSeed,
+    config: MapGenerationConfig,
     radius: i32,
     tiles: HashMap<HexCoord, Tile>,
     player_spawn: HexCoord,
@@ -98,7 +176,11 @@ pub struct Map {
 
 impl Map {
     pub fn starter(seed: WorldSeed) -> Self {
-        StarterMapGenerator::new(seed).generate()
+        Self::starter_with_config(seed, MapGenerationConfig::default())
+    }
+
+    pub fn starter_with_config(seed: WorldSeed, config: MapGenerationConfig) -> Self {
+        StarterMapGenerator::new(seed, config).generate()
     }
 
     #[cfg(test)]
@@ -109,6 +191,7 @@ impl Map {
     ) -> Self {
         Self {
             seed: WorldSeed(0),
+            config: MapGenerationConfig::default(),
             radius,
             tiles: tiles.into_iter().collect(),
             player_spawn,
@@ -118,6 +201,10 @@ impl Map {
 
     pub const fn radius(&self) -> i32 {
         self.radius
+    }
+
+    pub const fn config(&self) -> MapGenerationConfig {
+        self.config
     }
 
     pub const fn player_spawn(&self) -> HexCoord {
@@ -193,14 +280,15 @@ impl Map {
 
 struct StarterMapGenerator {
     seed: WorldSeed,
+    config: MapGenerationConfig,
     radius: i32,
     tiles: HashMap<HexCoord, Tile>,
     rooms: Vec<HexCoord>,
 }
 
 impl StarterMapGenerator {
-    fn new(seed: WorldSeed) -> Self {
-        let radius = 12;
+    fn new(seed: WorldSeed, config: MapGenerationConfig) -> Self {
+        let radius = config.radius;
         let mut tiles = HashMap::new();
 
         for q in -radius..=radius {
@@ -214,6 +302,7 @@ impl StarterMapGenerator {
 
         Self {
             seed,
+            config,
             radius,
             tiles,
             rooms: Vec::new(),
@@ -257,6 +346,7 @@ impl StarterMapGenerator {
 
         Map {
             seed: self.seed,
+            config: self.config,
             radius: self.radius,
             tiles: self.tiles,
             player_spawn,
@@ -316,8 +406,12 @@ impl Plugin for MapPlugin {
     }
 }
 
-fn setup_starter_map(mut commands: Commands, seed: Res<WorldSeed>) {
-    commands.insert_resource(Map::starter(*seed));
+fn setup_starter_map(
+    mut commands: Commands,
+    seed: Res<WorldSeed>,
+    config: Res<MapGenerationConfig>,
+) {
+    commands.insert_resource(Map::starter_with_config(*seed, *config));
 }
 
 #[cfg(test)]
@@ -330,10 +424,51 @@ mod tests {
     }
 
     #[test]
+    fn map_generation_config_has_named_presets() {
+        assert_eq!(
+            MapGenerationConfig::default(),
+            MapGenerationConfig::medium()
+        );
+        assert_eq!(
+            MapGenerationConfig::named("small"),
+            Some(MapGenerationConfig::small())
+        );
+        assert_eq!(
+            MapGenerationConfig::named("MEDIUM"),
+            Some(MapGenerationConfig::medium())
+        );
+        assert_eq!(
+            MapGenerationConfig::named("large"),
+            Some(MapGenerationConfig::large())
+        );
+        assert_eq!(MapGenerationConfig::named("huge"), None);
+    }
+
+    #[test]
+    fn custom_map_generation_config_validates_radius_bounds() {
+        assert_eq!(
+            MapGenerationConfig::custom(18),
+            Some(MapGenerationConfig {
+                preset: MapSizePreset::Custom,
+                radius: 18,
+            })
+        );
+        assert_eq!(
+            MapGenerationConfig::custom(MapGenerationConfig::MIN_RADIUS - 1),
+            None
+        );
+        assert_eq!(
+            MapGenerationConfig::custom(MapGenerationConfig::MAX_RADIUS + 1),
+            None
+        );
+    }
+
+    #[test]
     fn starter_map_keeps_seed_and_player_spawn_snapshot() {
         let map = Map::starter(WorldSeed(42));
 
         assert_eq!(map.seed, WorldSeed(42));
+        assert_eq!(map.config(), MapGenerationConfig::default());
         assert_eq!(map.player_spawn(), HexCoord::new(-1, 1));
     }
 
@@ -372,6 +507,20 @@ mod tests {
     }
 
     #[test]
+    fn starter_map_is_deterministic_for_seed_and_config() {
+        let config = MapGenerationConfig::large();
+
+        assert_eq!(
+            Map::starter_with_config(WorldSeed(7), config),
+            Map::starter_with_config(WorldSeed(7), config)
+        );
+        assert_ne!(
+            Map::starter_with_config(WorldSeed(7), MapGenerationConfig::small()),
+            Map::starter_with_config(WorldSeed(7), MapGenerationConfig::large())
+        );
+    }
+
+    #[test]
     fn starter_map_has_bounded_hex_tiles_and_queries() {
         let map = Map::starter(WorldSeed(42));
 
@@ -383,6 +532,20 @@ mod tests {
         assert!(!map.is_walkable(HexCoord::new(12, 0)));
         assert!(map.blocks_sight(HexCoord::new(12, 0)));
         assert!(map.blocks_sight(HexCoord::new(13, 0)));
+    }
+
+    #[test]
+    fn starter_map_uses_configured_radius() {
+        let small = Map::starter_with_config(WorldSeed(42), MapGenerationConfig::small());
+        let medium = Map::starter_with_config(WorldSeed(42), MapGenerationConfig::medium());
+        let large = Map::starter_with_config(WorldSeed(42), MapGenerationConfig::large());
+
+        assert_eq!(small.radius(), 8);
+        assert_eq!(medium.radius(), 12);
+        assert_eq!(large.radius(), 20);
+        assert_eq!(small.tile_count(), 217);
+        assert_eq!(medium.tile_count(), 469);
+        assert_eq!(large.tile_count(), 1261);
     }
 
     #[test]

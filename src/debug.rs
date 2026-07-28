@@ -113,12 +113,15 @@ fn update_debug_overlay(
         .unwrap_or_else(|| "player=not spawned".to_string());
 
     **text = format!(
-        "seed={}\n{}\nvisible={} explored={} tiles={} npcs={}\nreveal_all={} npc_pause={}\nF1 overlay  F2 reveal  F3 pause NPCs  Space step",
+        "seed={} map={} radius={}\n{}\nvisible={} explored={} tiles={} walkable={} npcs={}\nreveal_all={} npc_pause={}\nF1 overlay  F2 reveal  F3 pause NPCs  Space step",
         seed.0,
+        map.config().preset.label(),
+        map.radius(),
         player_status,
         visibility_state.visible_count(),
         visibility_state.explored_count(),
         map.tile_count(),
+        map.walkable_count(),
         npcs.iter().count(),
         settings.reveal_all,
         settings.npc_turns_paused,

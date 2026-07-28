@@ -24,6 +24,14 @@ ROGUELIKE_SEED=123 cargo run
 cargo run -- --seed 123
 ```
 
+Run with a map size preset or custom radius:
+
+```sh
+ROGUELIKE_MAP_SIZE=large cargo run
+cargo run -- --map-size small
+cargo run -- --map-radius 18
+```
+
 ## Test
 
 ```sh

@@ -6,6 +6,7 @@ use crate::{
         ActorSystems, FacingDirection, GridPosition, Npc, Player, ScreenDirection, facing_rotation,
         facing_vector,
     },
+    debug::DebugSettings,
     map::{HexCoord, Map},
     rendering::axial_to_world,
     visibility::{VisibilityState, VisibilitySystems},
@@ -34,6 +35,10 @@ pub struct NpcTurnPending(u32);
 impl NpcTurnPending {
     pub fn request(&mut self) {
         self.0 += 1;
+    }
+
+    pub fn has_pending(&self) -> bool {
+        self.0 > 0
     }
 
     fn take_one(&mut self) -> bool {
@@ -114,13 +119,20 @@ fn spawn_npcs(
 
 fn step_npc_turns(
     mut pending_turns: ResMut<NpcTurnPending>,
+    mut debug_settings: ResMut<DebugSettings>,
     map: Res<Map>,
     player: Single<&GridPosition, With<Player>>,
     mut npcs: NpcMovementQuery,
 ) {
-    if !pending_turns.take_one() {
+    if debug_settings.npc_turns_paused && !debug_settings.allow_paused_npc_turn {
         return;
     }
+
+    if !pending_turns.take_one() {
+        debug_settings.allow_paused_npc_turn = false;
+        return;
+    }
+    debug_settings.allow_paused_npc_turn = false;
 
     let player_coord = player.0;
     let mut occupied =
@@ -148,11 +160,12 @@ fn step_npc_turns(
 }
 
 fn update_npc_visibility(
+    debug_settings: Res<DebugSettings>,
     visibility_state: Res<VisibilityState>,
     mut npcs: Query<(&GridPosition, &mut Visibility), With<Npc>>,
 ) {
     for (position, mut visibility) in &mut npcs {
-        *visibility = if visibility_state.is_visible(position.0) {
+        *visibility = if debug_settings.reveal_all || visibility_state.is_visible(position.0) {
             Visibility::Visible
         } else {
             Visibility::Hidden

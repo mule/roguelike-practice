@@ -17,6 +17,13 @@ map/visibility/actor logic easy to test as it grows.
 cargo run
 ```
 
+Run with a reproducible seed:
+
+```sh
+ROGUELIKE_SEED=123 cargo run
+cargo run -- --seed 123
+```
+
 ## Test
 
 ```sh
@@ -36,6 +43,13 @@ cargo test
 - `D`: side-step right without changing facing
 - `Q`: rotate facing left
 - `E`: rotate facing right
+
+## Debug Controls
+
+- `F1`: toggle debug overlay
+- `F2`: toggle reveal-all map/NPC visibility
+- `F3`: pause or resume NPC turns
+- `Space`: step one NPC turn while NPC turns are paused
 
 ## Current Structure
 

@@ -3,6 +3,7 @@ use std::collections::HashSet;
 
 use crate::{
     actors::{ActorSystems, FacingDirection, GridPosition, Player, ScreenDirection, facing_vector},
+    debug::DebugSettings,
     map::{HexCoord, Map, TileKind},
     rendering::{RenderedTile, axial_to_world},
 };
@@ -23,6 +24,14 @@ impl VisibilityState {
 
     pub fn is_explored(&self, coord: HexCoord) -> bool {
         self.explored.contains(&coord)
+    }
+
+    pub fn visible_count(&self) -> usize {
+        self.visible.len()
+    }
+
+    pub fn explored_count(&self) -> usize {
+        self.explored.len()
     }
 
     fn set_visible(&mut self, visible: HashSet<HexCoord>) {
@@ -94,6 +103,7 @@ fn refresh_visibility(
     map: Res<Map>,
     mut state: ResMut<VisibilityState>,
     player: Single<(&GridPosition, &FacingDirection), With<Player>>,
+    debug_settings: Res<DebugSettings>,
     visibility_materials: Res<VisibilityMaterials>,
     mut rendered_tiles: Query<(&RenderedTile, &mut MeshMaterial2d<ColorMaterial>)>,
 ) {
@@ -111,6 +121,7 @@ fn refresh_visibility(
             &state,
             &visibility_materials,
             rendered_tile.coord,
+            debug_settings.reveal_all,
         ));
     }
 
@@ -122,8 +133,9 @@ fn material_for_tile(
     state: &VisibilityState,
     materials: &VisibilityMaterials,
     coord: HexCoord,
+    reveal_all: bool,
 ) -> Handle<ColorMaterial> {
-    if state.is_visible(coord) {
+    if reveal_all || state.is_visible(coord) {
         return match map.tile(coord).map(|tile| tile.kind) {
             Some(TileKind::Floor) => materials.visible_floor.clone(),
             Some(TileKind::Wall) => materials.visible_wall.clone(),

@@ -45,4 +45,4 @@ cargo test
 - `src/rendering.rs` owns camera and future map rendering setup.
 - `src/actors.rs` owns player/NPC marker components and grid positions.
 - `src/visibility.rs` owns line-of-sight and fog-of-war systems.
-- `src/ai.rs` owns NPC spawning, turn stepping, and basic movement behavior.
+- `src/ai.rs` owns NPC spawning, turn stepping, facing, and basic movement behavior.

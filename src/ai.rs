@@ -2,19 +2,29 @@ use bevy::prelude::*;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::{
-    actors::{ActorSystems, GridPosition, Npc, Player},
+    actors::{
+        ActorSystems, FacingDirection, GridPosition, Npc, Player, ScreenDirection, facing_rotation,
+        facing_vector,
+    },
     map::{HexCoord, Map},
     rendering::axial_to_world,
     visibility::{VisibilityState, VisibilitySystems},
 };
 
 const NPC_RADIUS: f32 = 9.0;
+const NPC_NOSE_RADIUS: f32 = 2.75;
+const NPC_NOSE_OFFSET: f32 = 5.75;
 const NPC_Z: f32 = 1.5;
+const NPC_NOSE_Z: f32 = 0.1;
 
 type NpcMovementQuery<'world, 'state> = Query<
     'world,
     'state,
-    (&'static mut GridPosition, &'static mut Transform),
+    (
+        &'static mut GridPosition,
+        &'static mut FacingDirection,
+        &'static mut Transform,
+    ),
     (With<Npc>, Without<Player>),
 >;
 
@@ -74,19 +84,31 @@ fn spawn_npcs(
 ) {
     let npc_mesh = meshes.add(Circle::new(NPC_RADIUS));
     let npc_material = materials.add(ColorMaterial::from_color(Color::srgb(0.85, 0.20, 0.38)));
+    let nose_mesh = meshes.add(Circle::new(NPC_NOSE_RADIUS));
+    let nose_material = materials.add(ColorMaterial::from_color(Color::srgb(0.98, 0.86, 0.24)));
 
     for coord in map.npc_spawns() {
         let world = axial_to_world(*coord);
+        let facing = initial_npc_facing(*coord, map.player_spawn());
 
-        commands.spawn((
-            Npc,
-            ApproachPlayer,
-            GridPosition(*coord),
-            Mesh2d(npc_mesh.clone()),
-            MeshMaterial2d(npc_material.clone()),
-            Transform::from_xyz(world.x, world.y, NPC_Z),
-            Visibility::Hidden,
-        ));
+        commands
+            .spawn((
+                Npc,
+                ApproachPlayer,
+                GridPosition(*coord),
+                FacingDirection(facing),
+                Mesh2d(npc_mesh.clone()),
+                MeshMaterial2d(npc_material.clone()),
+                Transform::from_xyz(world.x, world.y, NPC_Z).with_rotation(facing_rotation(facing)),
+                Visibility::Hidden,
+            ))
+            .with_children(|parent| {
+                parent.spawn((
+                    Mesh2d(nose_mesh.clone()),
+                    MeshMaterial2d(nose_material.clone()),
+                    Transform::from_xyz(0.0, NPC_NOSE_OFFSET, NPC_NOSE_Z),
+                ));
+            });
     }
 }
 
@@ -102,14 +124,19 @@ fn step_npc_turns(
 
     let player_coord = player.0;
     let mut occupied =
-        occupied_actor_tiles(player_coord, npcs.iter().map(|(position, _)| position.0));
+        occupied_actor_tiles(player_coord, npcs.iter().map(|(position, _, _)| position.0));
 
-    for (mut position, mut transform) in &mut npcs {
+    for (mut position, mut facing, mut transform) in &mut npcs {
         occupied.remove(&position.0);
 
         if let Some(destination) =
             next_step_toward_target(position.0, player_coord, &occupied, &map)
         {
+            if let Some(movement_facing) = facing_for_hex_step(position.0, destination) {
+                facing.0 = movement_facing;
+                transform.rotation = facing_rotation(movement_facing);
+            }
+
             position.0 = destination;
             let world = axial_to_world(destination);
             transform.translation.x = world.x;
@@ -141,6 +168,41 @@ fn occupied_actor_tiles(
         .into_iter()
         .chain(npc_coords)
         .collect()
+}
+
+pub fn facing_for_hex_step(from: HexCoord, to: HexCoord) -> Option<ScreenDirection> {
+    HexCoord::DIRECTIONS
+        .iter()
+        .position(|offset| HexCoord::new(from.q + offset.q, from.r + offset.r) == to)
+        .map(|direction| match direction {
+            0 => ScreenDirection::East,
+            1 => ScreenDirection::Southeast,
+            2 => ScreenDirection::Southwest,
+            3 => ScreenDirection::West,
+            4 => ScreenDirection::Northwest,
+            5 => ScreenDirection::Northeast,
+            _ => unreachable!("hex direction index is bounded by DIRECTIONS"),
+        })
+}
+
+fn initial_npc_facing(from: HexCoord, target: HexCoord) -> ScreenDirection {
+    if from == target {
+        return ScreenDirection::North;
+    }
+
+    let to_target = (axial_to_world(target) - axial_to_world(from)).normalize_or_zero();
+    let mut best_direction = ScreenDirection::North;
+    let mut best_score = f32::NEG_INFINITY;
+
+    for direction in ScreenDirection::ALL {
+        let score = facing_vector(direction).dot(to_target);
+        if score > best_score {
+            best_direction = direction;
+            best_score = score;
+        }
+    }
+
+    best_direction
 }
 
 pub fn next_step_toward_target(
@@ -265,6 +327,60 @@ mod tests {
         assert_eq!(
             next_step_toward_target(start, target, &occupied, &map),
             None
+        );
+    }
+
+    #[test]
+    fn facing_for_hex_step_maps_each_hex_neighbor_to_screen_facing() {
+        let origin = HexCoord::new(0, 0);
+
+        assert_eq!(
+            facing_for_hex_step(origin, origin.neighbor(0)),
+            Some(ScreenDirection::East)
+        );
+        assert_eq!(
+            facing_for_hex_step(origin, origin.neighbor(1)),
+            Some(ScreenDirection::Southeast)
+        );
+        assert_eq!(
+            facing_for_hex_step(origin, origin.neighbor(2)),
+            Some(ScreenDirection::Southwest)
+        );
+        assert_eq!(
+            facing_for_hex_step(origin, origin.neighbor(3)),
+            Some(ScreenDirection::West)
+        );
+        assert_eq!(
+            facing_for_hex_step(origin, origin.neighbor(4)),
+            Some(ScreenDirection::Northwest)
+        );
+        assert_eq!(
+            facing_for_hex_step(origin, origin.neighbor(5)),
+            Some(ScreenDirection::Northeast)
+        );
+    }
+
+    #[test]
+    fn facing_for_hex_step_ignores_non_adjacent_movement() {
+        assert_eq!(
+            facing_for_hex_step(HexCoord::new(0, 0), HexCoord::new(2, 0)),
+            None
+        );
+    }
+
+    #[test]
+    fn initial_npc_facing_points_toward_the_player() {
+        assert_eq!(
+            initial_npc_facing(HexCoord::new(-2, 0), HexCoord::new(0, 0)),
+            ScreenDirection::East
+        );
+        assert_eq!(
+            initial_npc_facing(HexCoord::new(2, 0), HexCoord::new(0, 0)),
+            ScreenDirection::West
+        );
+        assert_eq!(
+            initial_npc_facing(HexCoord::new(1, -2), HexCoord::new(0, 0)),
+            ScreenDirection::North
         );
     }
 

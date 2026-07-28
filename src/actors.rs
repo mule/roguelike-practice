@@ -31,19 +31,23 @@ pub struct VerticalStepPhase {
 pub enum ScreenDirection {
     North,
     Northeast,
+    East,
     Southeast,
     South,
     Southwest,
+    West,
     Northwest,
 }
 
 impl ScreenDirection {
-    const ALL: [Self; 6] = [
+    pub const ALL: [Self; 8] = [
         Self::North,
         Self::Northeast,
+        Self::East,
         Self::Southeast,
         Self::South,
         Self::Southwest,
+        Self::West,
         Self::Northwest,
     ];
 
@@ -56,19 +60,27 @@ impl ScreenDirection {
     }
 
     pub const fn opposite(self) -> Self {
-        Self::ALL[(self.index() + 3) % Self::ALL.len()]
+        Self::ALL[(self.index() + 4) % Self::ALL.len()]
     }
 
     const fn index(self) -> usize {
         match self {
             Self::North => 0,
             Self::Northeast => 1,
-            Self::Southeast => 2,
-            Self::South => 3,
-            Self::Southwest => 4,
-            Self::Northwest => 5,
+            Self::East => 2,
+            Self::Southeast => 3,
+            Self::South => 4,
+            Self::Southwest => 5,
+            Self::West => 6,
+            Self::Northwest => 7,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SideStepDirection {
+    Left,
+    Right,
 }
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
@@ -162,6 +174,30 @@ fn move_player(
                 npc_turns.request();
             }
         }
+        PlayerAction::SideStepLeft => {
+            if try_side_step(
+                grid_position,
+                facing.0,
+                SideStepDirection::Left,
+                transform,
+                &map,
+            ) {
+                visibility_dirty.mark();
+                npc_turns.request();
+            }
+        }
+        PlayerAction::SideStepRight => {
+            if try_side_step(
+                grid_position,
+                facing.0,
+                SideStepDirection::Right,
+                transform,
+                &map,
+            ) {
+                visibility_dirty.mark();
+                npc_turns.request();
+            }
+        }
     }
 }
 
@@ -178,7 +214,6 @@ fn try_move(
         phase.use_right_diagonal,
         map,
     ) {
-        grid_position.0 = destination;
         if matches!(
             movement_direction,
             ScreenDirection::North | ScreenDirection::South
@@ -186,9 +221,7 @@ fn try_move(
             phase.use_right_diagonal = !phase.use_right_diagonal;
         }
 
-        let world = axial_to_world(destination);
-        transform.translation.x = world.x;
-        transform.translation.y = world.y;
+        move_to_grid_position(grid_position, destination, transform);
 
         return true;
     }
@@ -196,10 +229,38 @@ fn try_move(
     false
 }
 
+fn try_side_step(
+    grid_position: &mut GridPosition,
+    facing: ScreenDirection,
+    side: SideStepDirection,
+    transform: &mut Transform,
+    map: &Map,
+) -> bool {
+    if let Some(destination) = side_step_destination(grid_position.0, facing, side, map) {
+        move_to_grid_position(grid_position, destination, transform);
+        return true;
+    }
+
+    false
+}
+
+fn move_to_grid_position(
+    grid_position: &mut GridPosition,
+    destination: HexCoord,
+    transform: &mut Transform,
+) {
+    grid_position.0 = destination;
+    let world = axial_to_world(destination);
+    transform.translation.x = world.x;
+    transform.translation.y = world.y;
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PlayerAction {
     MoveForward,
     MoveBackward,
+    SideStepLeft,
+    SideStepRight,
     RotateLeft,
     RotateRight,
 }
@@ -208,6 +269,8 @@ fn pressed_player_action(keyboard: &ButtonInput<KeyCode>) -> Option<PlayerAction
     [
         (KeyCode::KeyW, PlayerAction::MoveForward),
         (KeyCode::KeyS, PlayerAction::MoveBackward),
+        (KeyCode::KeyA, PlayerAction::SideStepLeft),
+        (KeyCode::KeyD, PlayerAction::SideStepRight),
         (KeyCode::KeyQ, PlayerAction::RotateLeft),
         (KeyCode::KeyE, PlayerAction::RotateRight),
     ]
@@ -228,14 +291,26 @@ pub fn walk_destination(
     map.is_walkable(destination).then_some(destination)
 }
 
+pub fn side_step_destination(
+    current: HexCoord,
+    facing: ScreenDirection,
+    side: SideStepDirection,
+    map: &Map,
+) -> Option<HexCoord> {
+    let destination = current.neighbor(side_step_hex_direction(facing, side));
+    map.is_walkable(destination).then_some(destination)
+}
+
 pub const fn hex_direction_for_screen_direction(
     direction: ScreenDirection,
     use_right_diagonal: bool,
 ) -> usize {
     match (direction, use_right_diagonal) {
+        (ScreenDirection::East, _) => 0,
         (ScreenDirection::Northeast, _) => 5,
         (ScreenDirection::Southeast, _) => 1,
         (ScreenDirection::Southwest, _) => 2,
+        (ScreenDirection::West, _) => 3,
         (ScreenDirection::Northwest, _) => 4,
         (ScreenDirection::South, true) => 1,
         (ScreenDirection::South, false) => 2,
@@ -244,23 +319,64 @@ pub const fn hex_direction_for_screen_direction(
     }
 }
 
+pub fn side_step_hex_direction(facing: ScreenDirection, side: SideStepDirection) -> usize {
+    let facing_vector = facing_vector(facing);
+    let lateral_vector = match side {
+        SideStepDirection::Left => Vec2::new(-facing_vector.y, facing_vector.x),
+        SideStepDirection::Right => Vec2::new(facing_vector.y, -facing_vector.x),
+    };
+
+    let mut best_direction = 0;
+    let mut best_score = f32::NEG_INFINITY;
+    for hex_direction in 0..HexCoord::DIRECTIONS.len() {
+        let score = hex_step_vector(hex_direction).dot(lateral_vector);
+        if score > best_score {
+            best_direction = hex_direction;
+            best_score = score;
+        }
+    }
+
+    best_direction
+}
+
 pub fn facing_rotation(direction: ScreenDirection) -> Quat {
     let radians = match direction {
         ScreenDirection::North => 0.0,
-        ScreenDirection::Northeast => -std::f32::consts::FRAC_PI_3,
-        ScreenDirection::Southeast => -2.0 * std::f32::consts::FRAC_PI_3,
+        ScreenDirection::Northeast => -std::f32::consts::FRAC_PI_4,
+        ScreenDirection::East => -std::f32::consts::FRAC_PI_2,
+        ScreenDirection::Southeast => -3.0 * std::f32::consts::FRAC_PI_4,
         ScreenDirection::South => std::f32::consts::PI,
-        ScreenDirection::Southwest => 2.0 * std::f32::consts::FRAC_PI_3,
-        ScreenDirection::Northwest => std::f32::consts::FRAC_PI_3,
+        ScreenDirection::Southwest => 3.0 * std::f32::consts::FRAC_PI_4,
+        ScreenDirection::West => std::f32::consts::FRAC_PI_2,
+        ScreenDirection::Northwest => std::f32::consts::FRAC_PI_4,
     };
 
     Quat::from_rotation_z(radians)
 }
 
+pub fn facing_vector(direction: ScreenDirection) -> Vec2 {
+    let diagonal = std::f32::consts::FRAC_1_SQRT_2;
+    match direction {
+        ScreenDirection::North => Vec2::Y,
+        ScreenDirection::Northeast => Vec2::new(diagonal, diagonal),
+        ScreenDirection::East => Vec2::X,
+        ScreenDirection::Southeast => Vec2::new(diagonal, -diagonal),
+        ScreenDirection::South => Vec2::NEG_Y,
+        ScreenDirection::Southwest => Vec2::new(-diagonal, -diagonal),
+        ScreenDirection::West => Vec2::NEG_X,
+        ScreenDirection::Northwest => Vec2::new(-diagonal, diagonal),
+    }
+}
+
+fn hex_step_vector(direction: usize) -> Vec2 {
+    let origin = HexCoord::new(0, 0);
+    (axial_to_world(origin.neighbor(direction)) - axial_to_world(origin)).normalize_or_zero()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::WorldSeed;
+    use crate::map::{Tile, WorldSeed};
 
     #[test]
     fn walk_destination_allows_adjacent_walkable_tiles() {
@@ -291,7 +407,6 @@ mod tests {
                             .position(|offset| {
                                 HexCoord::new(floor.q + offset.q, floor.r + offset.r) == wall
                             })
-                            .filter(|direction| !matches!(direction, 0 | 3))
                             .map(|direction| (wall, floor, direction))
                     })
             })
@@ -348,7 +463,63 @@ mod tests {
     }
 
     #[test]
-    fn facing_direction_rotates_through_six_facings() {
+    fn east_and_west_forward_and_backward_are_opposites() {
+        assert_eq!(ScreenDirection::East.opposite(), ScreenDirection::West);
+        assert_eq!(
+            hex_direction_for_screen_direction(ScreenDirection::East, false),
+            0
+        );
+        assert_eq!(
+            hex_direction_for_screen_direction(ScreenDirection::West, false),
+            3
+        );
+    }
+
+    #[test]
+    fn side_step_uses_actor_relative_lateral_directions() {
+        assert_eq!(
+            side_step_hex_direction(ScreenDirection::North, SideStepDirection::Left),
+            3
+        );
+        assert_eq!(
+            side_step_hex_direction(ScreenDirection::North, SideStepDirection::Right),
+            0
+        );
+        assert_eq!(
+            side_step_hex_direction(ScreenDirection::East, SideStepDirection::Left),
+            4
+        );
+        assert_eq!(
+            side_step_hex_direction(ScreenDirection::East, SideStepDirection::Right),
+            1
+        );
+        assert_eq!(
+            side_step_hex_direction(ScreenDirection::Southwest, SideStepDirection::Left),
+            1
+        );
+        assert_eq!(
+            side_step_hex_direction(ScreenDirection::Southwest, SideStepDirection::Right),
+            4
+        );
+    }
+
+    #[test]
+    fn side_step_destination_does_not_depend_on_global_east_and_west() {
+        let map = open_test_map(2);
+        let start = HexCoord::new(0, 0);
+
+        assert_eq!(
+            side_step_destination(start, ScreenDirection::North, SideStepDirection::Left, &map),
+            Some(HexCoord::new(-1, 0))
+        );
+        assert_eq!(
+            side_step_destination(start, ScreenDirection::East, SideStepDirection::Left, &map),
+            Some(HexCoord::new(-1, 1))
+        );
+    }
+
+    #[test]
+    fn facing_direction_rotates_through_eight_facings() {
         assert_eq!(
             ScreenDirection::North.rotate_left(),
             ScreenDirection::Northwest
@@ -356,6 +527,14 @@ mod tests {
         assert_eq!(
             ScreenDirection::North.rotate_right(),
             ScreenDirection::Northeast
+        );
+        assert_eq!(
+            ScreenDirection::Northeast.rotate_right(),
+            ScreenDirection::East
+        );
+        assert_eq!(
+            ScreenDirection::Southwest.rotate_right(),
+            ScreenDirection::West
         );
         assert_eq!(
             ScreenDirection::South.rotate_left(),
@@ -369,11 +548,28 @@ mod tests {
 
     fn screen_direction_for_hex_direction(hex_direction: usize) -> (ScreenDirection, bool) {
         match hex_direction {
+            0 => (ScreenDirection::East, false),
             1 => (ScreenDirection::Southeast, false),
             2 => (ScreenDirection::Southwest, false),
+            3 => (ScreenDirection::West, false),
             4 => (ScreenDirection::Northwest, false),
             5 => (ScreenDirection::Northeast, false),
             _ => unreachable!("hex direction is wrapped before this helper"),
         }
+    }
+
+    fn open_test_map(radius: i32) -> Map {
+        let mut tiles = Vec::new();
+
+        for q in -radius..=radius {
+            for r in -radius..=radius {
+                let coord = HexCoord::new(q, r);
+                if HexCoord::new(0, 0).distance(coord) <= radius {
+                    tiles.push((coord, Tile::floor()));
+                }
+            }
+        }
+
+        Map::from_tiles_for_test(radius, tiles, HexCoord::new(0, 0))
     }
 }

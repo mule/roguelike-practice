@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use std::collections::HashSet;
 
 use crate::{
-    actors::{ActorSystems, FacingDirection, GridPosition, Player, ScreenDirection},
+    actors::{ActorSystems, FacingDirection, GridPosition, Player, ScreenDirection, facing_vector},
     map::{HexCoord, Map, TileKind},
     rendering::{RenderedTile, axial_to_world},
 };
@@ -168,22 +168,6 @@ fn is_inside_facing_cone(origin: HexCoord, facing: ScreenDirection, target: HexC
     to_target.dot(facing_vector) >= CONE_HALF_ANGLE_COS
 }
 
-fn facing_vector(facing: ScreenDirection) -> Vec2 {
-    match facing {
-        ScreenDirection::North => Vec2::Y,
-        ScreenDirection::Northeast => hex_step_vector(5),
-        ScreenDirection::Southeast => hex_step_vector(1),
-        ScreenDirection::South => Vec2::NEG_Y,
-        ScreenDirection::Southwest => hex_step_vector(2),
-        ScreenDirection::Northwest => hex_step_vector(4),
-    }
-}
-
-fn hex_step_vector(direction: usize) -> Vec2 {
-    (axial_to_world(HexCoord::new(0, 0).neighbor(direction)) - axial_to_world(HexCoord::new(0, 0)))
-        .normalize_or_zero()
-}
-
 fn has_line_of_sight(map: &Map, origin: HexCoord, target: HexCoord) -> bool {
     for coord in hex_line(origin, target).into_iter().skip(1) {
         if coord == target {
@@ -297,6 +281,20 @@ mod tests {
         assert_ne!(north, south);
         assert!(north.contains(&HexCoord::new(0, 1)));
         assert!(south.contains(&HexCoord::new(0, -1)));
+    }
+
+    #[test]
+    fn east_and_west_facings_have_horizontal_cones() {
+        let map = open_test_map(3, &[]);
+        let origin = HexCoord::new(0, 0);
+
+        let east = visible_tiles_for(&map, origin, ScreenDirection::East, 3);
+        let west = visible_tiles_for(&map, origin, ScreenDirection::West, 3);
+
+        assert!(east.contains(&HexCoord::new(1, 0)));
+        assert!(!east.contains(&HexCoord::new(-1, 0)));
+        assert!(west.contains(&HexCoord::new(-1, 0)));
+        assert!(!west.contains(&HexCoord::new(1, 0)));
     }
 
     #[test]

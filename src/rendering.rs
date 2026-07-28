@@ -38,14 +38,20 @@ fn spawn_map_tiles(
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     let hex_mesh = meshes.add(RegularPolygon::new(HEX_RADIUS, 6));
+    let ground_material = materials.add(ColorMaterial::from_color(Color::srgb(0.18, 0.28, 0.18)));
     let floor_material = materials.add(ColorMaterial::from_color(Color::srgb(0.12, 0.35, 0.34)));
     let wall_material = materials.add(ColorMaterial::from_color(Color::srgb(0.08, 0.10, 0.14)));
+    let forest_material = materials.add(ColorMaterial::from_color(Color::srgb(0.06, 0.23, 0.10)));
+    let hill_material = materials.add(ColorMaterial::from_color(Color::srgb(0.32, 0.30, 0.18)));
 
     for (coord, tile) in map.tiles() {
         let world = axial_to_world(coord);
         let material = match tile.kind {
+            TileKind::Ground => ground_material.clone(),
             TileKind::Floor => floor_material.clone(),
             TileKind::Wall => wall_material.clone(),
+            TileKind::Forest => forest_material.clone(),
+            TileKind::Hill => hill_material.clone(),
         };
 
         commands.spawn((

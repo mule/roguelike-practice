@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use std::collections::HashSet;
 
 use crate::{
-    actors::{FacingDirection, GridPosition, Player, ScreenDirection},
+    actors::{ActorSystems, FacingDirection, GridPosition, Player, ScreenDirection},
     map::{HexCoord, Map, TileKind},
     rendering::{RenderedTile, axial_to_world},
 };
@@ -57,12 +57,22 @@ struct VisibilityMaterials {
 
 pub struct VisibilityPlugin;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum VisibilitySystems {
+    Refresh,
+}
+
 impl Plugin for VisibilityPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<VisibilityState>()
             .init_resource::<VisibilityDirty>()
             .add_systems(Startup, setup_visibility_materials)
-            .add_systems(Update, refresh_visibility);
+            .add_systems(
+                Update,
+                refresh_visibility
+                    .in_set(VisibilitySystems::Refresh)
+                    .after(ActorSystems::PlayerInput),
+            );
     }
 }
 

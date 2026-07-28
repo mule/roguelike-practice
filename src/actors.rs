@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::{
     map::{HexCoord, Map},
     rendering::axial_to_world,
+    visibility::VisibilityDirty,
 };
 
 const PLAYER_RADIUS: f32 = 13.0;
@@ -115,6 +116,7 @@ fn spawn_player(
 fn move_player(
     keyboard: Res<ButtonInput<KeyCode>>,
     map: Res<Map>,
+    mut visibility_dirty: ResMut<VisibilityDirty>,
     mut player: Single<
         (
             &mut GridPosition,
@@ -134,16 +136,22 @@ fn move_player(
         PlayerAction::RotateLeft => {
             facing.0 = facing.0.rotate_left();
             transform.rotation = facing_rotation(facing.0);
+            visibility_dirty.mark();
         }
         PlayerAction::RotateRight => {
             facing.0 = facing.0.rotate_right();
             transform.rotation = facing_rotation(facing.0);
+            visibility_dirty.mark();
         }
         PlayerAction::MoveForward => {
-            try_move(grid_position, facing.0, phase, transform, &map);
+            if try_move(grid_position, facing.0, phase, transform, &map) {
+                visibility_dirty.mark();
+            }
         }
         PlayerAction::MoveBackward => {
-            try_move(grid_position, facing.0.opposite(), phase, transform, &map);
+            if try_move(grid_position, facing.0.opposite(), phase, transform, &map) {
+                visibility_dirty.mark();
+            }
         }
     }
 }
@@ -154,7 +162,7 @@ fn try_move(
     phase: &mut VerticalStepPhase,
     transform: &mut Transform,
     map: &Map,
-) {
+) -> bool {
     if let Some(destination) = walk_destination(
         grid_position.0,
         movement_direction,
@@ -172,7 +180,11 @@ fn try_move(
         let world = axial_to_world(destination);
         transform.translation.x = world.x;
         transform.translation.y = world.y;
+
+        return true;
     }
+
+    false
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -101,6 +101,21 @@ impl Map {
         StarterMapGenerator::new(seed).generate()
     }
 
+    #[cfg(test)]
+    pub(crate) fn from_tiles_for_test(
+        radius: i32,
+        tiles: impl IntoIterator<Item = (HexCoord, Tile)>,
+        player_spawn: HexCoord,
+    ) -> Self {
+        Self {
+            seed: WorldSeed(0),
+            radius,
+            tiles: tiles.into_iter().collect(),
+            player_spawn,
+            npc_spawns: Vec::new(),
+        }
+    }
+
     pub const fn radius(&self) -> i32 {
         self.radius
     }

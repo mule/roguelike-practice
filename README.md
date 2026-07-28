@@ -23,6 +23,11 @@ cargo run
 cargo test
 ```
 
+## Docs
+
+- [Line of sight](docs/line-of-sight.md) explains the current facing-cone LOS
+  and fog-of-war algorithm.
+
 ## Controls
 
 - `W`: move forward in the current facing direction

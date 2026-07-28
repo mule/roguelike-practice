@@ -42,5 +42,5 @@ cargo test
 - `src/map.rs` owns early map data, tile concepts, and deterministic seed state.
 - `src/rendering.rs` owns camera and future map rendering setup.
 - `src/actors.rs` owns player/NPC marker components and grid positions.
-- `src/visibility.rs` is reserved for line-of-sight and fog-of-war systems.
-- `src/ai.rs` is reserved for NPC turn and movement behavior.
+- `src/visibility.rs` owns line-of-sight and fog-of-war systems.
+- `src/ai.rs` owns NPC spawning, turn stepping, and basic movement behavior.

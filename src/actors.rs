@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
+    ai::NpcTurnPending,
     map::{HexCoord, Map},
     rendering::axial_to_world,
     visibility::VisibilityDirty,
@@ -75,10 +76,15 @@ pub struct Npc;
 
 pub struct ActorsPlugin;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ActorSystems {
+    PlayerInput,
+}
+
 impl Plugin for ActorsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(PostStartup, spawn_player)
-            .add_systems(Update, move_player);
+            .add_systems(Update, move_player.in_set(ActorSystems::PlayerInput));
     }
 }
 
@@ -117,6 +123,7 @@ fn move_player(
     keyboard: Res<ButtonInput<KeyCode>>,
     map: Res<Map>,
     mut visibility_dirty: ResMut<VisibilityDirty>,
+    mut npc_turns: ResMut<NpcTurnPending>,
     mut player: Single<
         (
             &mut GridPosition,
@@ -146,11 +153,13 @@ fn move_player(
         PlayerAction::MoveForward => {
             if try_move(grid_position, facing.0, phase, transform, &map) {
                 visibility_dirty.mark();
+                npc_turns.request();
             }
         }
         PlayerAction::MoveBackward => {
             if try_move(grid_position, facing.0.opposite(), phase, transform, &map) {
                 visibility_dirty.mark();
+                npc_turns.request();
             }
         }
     }
